@@ -1,16 +1,17 @@
 # Lifecycle Automation Lab
 
-Three Klaviyo flows on a Shopify development store: welcome with double opt-in,
-abandoned cart and win-back. The win-back is triggered by lifecycle stages that
-a Python script computes from order history and writes onto the Klaviyo profile.
+Three email flows built in Klaviyo on a Shopify development store: welcome with
+double opt-in, abandoned cart and win-back. I set up the accounts,
+authenticated the sending domain and sent the flows for real, to see what
+actually happens between "the flow is drawn" and "the email arrives".
 
 ## What is real and what is not
 
 | Real | Not real |
 | --- | --- |
 | A Klaviyo account with three live flows and seven emails | The store is a Shopify development store: password-protected, with no real customers |
-| A sending domain I authenticated myself (NS delegation, DKIM, DMARC), checked with public DNS queries | The orders in it were seeded by me |
-| A double opt-in list, and a sync script that refuses to act on a profile without consent | One subscriber, three delivered emails, no clicks and no sales |
+| A sending domain I authenticated myself (DKIM and DMARC), checked against the public DNS records | The orders in it were seeded by me |
+| A double opt-in list, and a rule that no profile is touched without consent | One subscriber, three delivered emails, no clicks and no sales |
 
 So this repository shows that the mechanism works end to end. It does not show
 performance: there is no open rate, click rate or revenue worth reporting, and
@@ -21,22 +22,22 @@ performance: there is no open rate, click rate or revenue worth reporting, and
 These only showed up because the flows were actually sent, not just drawn.
 
 1. **Smart Sending skipped the first abandoned-cart email.** A welcome email
-   had gone out five hours earlier, so Klaviyo suppressed the cart email. The
-   API showed no send event and no skip event. One screen in the ESP names the
+   had gone out five hours earlier, so Klaviyo held back the cart email. Nothing
+   in the reports said so: no send, no error. One screen in Klaviyo names the
    reason. The next email in the same flow went out a day later, once the window
    had passed.
 2. **Double opt-in on a list does not protect the list.** A sign-up through
-   Shopify's own newsletter field was written into Klaviyo as `SUBSCRIBED` 86 ms
-   after the webhook, with no confirmation email. The setting only protects the
-   path that goes through the form.
-3. **A green "Verified" was someone else's DNS record.** The first domain I
-   tried was parked on a resale marketplace whose wildcard answered every TXT
-   query. Klaviyo marked DMARC as verified and nothing had been configured.
-   Since then I check DNS with `nslookup`, not with the vendor's status column.
+   Shopify's own newsletter field arrived in Klaviyo as subscribed straight
+   away, with no confirmation email. The setting only protects sign-ups that
+   come through the Klaviyo form.
+3. **A green "Verified" was not my configuration.** The first domain I tried
+   was parked on a resale marketplace that answered every DNS check. Klaviyo
+   showed the domain as verified although I had configured nothing. Since then
+   I check the DNS records myself instead of trusting the status column.
 
-One claim is still unproven: the abandoned-cart exit condition has not been
-observed stopping a send, because the one test run against it was confounded
-by Smart Sending. The results name the experiment that would settle it.
+One thing is still unproven: I have not yet seen the abandoned-cart flow stop
+when the customer completes the order, because Smart Sending got in the way of
+the one test I ran. The results describe the test that would settle it.
 
 Full write-up, including what else broke: [`reports/results.md`](reports/results.md).
 
@@ -61,56 +62,68 @@ Domain authentication: [`docs/deliverability.md`](docs/deliverability.md).
 More screenshots (welcome flow, segment, double opt-in setting, DNS answers,
 Shopify admin) are in [`assets/`](assets).
 
-## From analysis to ESP segment
+## How a customer enters the win-back
 
-The lifecycle model does not live in the ESP. It is computed from order history
-and pushed onto the profile as a property. A Klaviyo segment reads the property
-and the segment triggers the flow.
+Each customer gets a lifecycle stage based on the date of their last order.
+The stage is saved on the Klaviyo profile, a Klaviyo segment collects everyone
+who is "At risk", and entering that segment starts the win-back flow.
 
 ```
-orders export  ─┐
-                ├─►  sync_klaviyo.py  ─►  profile property        ─►  Klaviyo segment  ─►  flow
-consent export ─┘    (hard consent gate)   lifecycle_stage="At risk"   "At risk"          win-back
+order history + consent  ->  lifecycle stage on the profile  ->  "At risk" segment  ->  win-back flow
 ```
 
 | Stage | Rule |
 | --- | --- |
 | New | last order ≤ 90 days ago, 1 order |
 | Repeat | last order ≤ 90 days ago, ≥ 2 orders |
-| At risk | last order 91–180 days ago |
-| Dormant | last order 181–365 days ago |
+| At risk | last order 91-180 days ago |
+| Dormant | last order 181-365 days ago |
 | Churned | last order > 365 days ago |
 
 The thresholds are the same as in my
 [CRM retention analysis](https://github.com/errer441122/digital-campaign-performance-dashboard).
 
-The script never grants consent. It only updates profiles that have already
-opted in, and it reports everyone it held back.
+Consent comes first: only profiles that have already opted in are updated, and
+everyone held back is listed in a report. Nothing in this project can subscribe
+a person who did not ask for it.
 
-## Run it
+## Real-World Business Application (Next Steps)
 
-Python standard library only.
+What I would do on a store with real customers.
+
+1. **Turn Smart Sending off on high-intent flows.** Smart Sending stops a
+   person from receiving two emails within a set window. That is right for
+   newsletters, but an abandoned cart is the moment the customer is closest
+   to buying. In this lab I left it on to document the behaviour, and it cost
+   the first cart email. On a real store I would switch it off for abandoned
+   cart and order emails, and keep it on for campaigns.
+2. **Use the segments to decide who gets a discount.** A discount sent to
+   everyone is paid mostly by people who would have bought anyway. The
+   win-back offer here goes only to customers whose last order was 91 to 180
+   days ago, and only once. Recent and loyal customers get content, not money
+   off.
+3. **Treat consent as a rule of the whole system, not one setting.** Double
+   opt-in on the list was not enough: the Shopify newsletter checkbox went
+   around it. On a real store I would send every sign-up source through the
+   same confirmed opt-in, keep the date and source of each consent, and check
+   the list for unconfirmed profiles regularly. Under GDPR the shop has to be
+   able to show how each person consented.
+4. **Measure with real traffic.** With one subscriber there is nothing to
+   measure. The next step is a store with real visitors, where each flow can be
+   judged on revenue per recipient and unsubscribe rate.
+
+## Run the example
+
+The lifecycle rules can be tried on the example data without any account:
 
 ```bash
 python -m unittest discover -s tests
-```
-
-```bash
 python src/sync_klaviyo.py --as-of 2026-06-01
 ```
 
-That is a dry run on the example data in `data/`: it prints who would be synced
-and who is suppressed, and sends nothing. A live sync needs `KLAVIYO_API_KEY` in
-the environment and the `--live` flag.
-
-The seven emails are generated from this repo, because Klaviyo's API does not
-let you update a flow message's content. The HTML is pasted in by hand once, and
-this command (read-only API key needed) checks that what is live still matches
-the repo:
-
-```bash
-python src/build_templates.py --verify
-```
+This is a dry run: it prints who would be updated and who is held back for
+missing consent, and sends nothing. Writing to a real Klaviyo account needs an
+API key and the `--live` flag.
 
 ## Boundaries
 
@@ -121,11 +134,11 @@ python src/build_templates.py --verify
 
 ## How I built this
 
-Built with AI coding assistants as a pair programmer: they drafted most of the
-code and docs. My part: setting up and running the Klaviyo and Shopify accounts
-and the DNS, defining the rules (consent, triggers, timing), checking results
-against the source data and deciding what to report, including what did not
-work.
+I am a Digital Marketing student, not a developer. The Python scripts were
+written mostly by AI coding assistants. My part was setting up and running the
+Klaviyo and Shopify accounts and the DNS, defining the rules (consent, triggers,
+timing), checking what was actually sent and deciding what to report, including
+what did not work.
 
 ## Licence
 
