@@ -13,6 +13,13 @@ this repository's Python in the browser, so nothing leaves your computer and
 nothing needs installing. Each tool has a "try it" button with the example
 files, which are only there to show what the output looks like.
 
+[![The tools page: the seven flow emails as a recipient sees them, and the second-order timing tool on 36,969 public orders](assets/tools_page.png)](https://errer441122.github.io/lifecycle-automation-lab/)
+
+The page opens on the seven flow emails as a recipient sees them, with the
+Klaviyo tags filled in the way Klaviyo's own preview does. Below are the three
+tools, one tab each (in the picture, the second-order timing on the 36,969
+public UCI orders), and the three flows as built in Klaviyo.
+
 The same three tools run from the command line, where the lifecycle sync can
 also write to Klaviyo (with `--live` and an API key; never from the page):
 
