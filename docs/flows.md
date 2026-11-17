@@ -150,9 +150,10 @@ cadence is a weekly re-sync, which also means the property carries
 
 ## Measurement
 
-Every link carries the UTM taxonomy from the analysis repo
-([`tracking/UTM_TAXONOMY.md`](https://github.com/errer441122/digital-campaign-performance-dashboard/blob/main/tracking/UTM_TAXONOMY.md)),
-so flow traffic is separable from campaign traffic in GA4:
+Every link carries this UTM taxonomy, so flow traffic is separable from
+campaign traffic in GA4. Klaviyo's UTM tracking adds the parameters when the
+email is sent; a UTM typed into a template by hand must follow the same table,
+and `src/pre_send_check.py` refuses one that does not:
 
 | Parameter | Value |
 | --- | --- |

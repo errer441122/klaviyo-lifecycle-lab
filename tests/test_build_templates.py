@@ -47,14 +47,6 @@ class TestRenderedHtml(unittest.TestCase):
                 self.assertIn("{% unsubscribe %}", bt.render_html(e))
                 self.assertIn("{% unsubscribe %}", bt.render_text(e))
 
-    def test_first_name_always_has_a_default(self):
-        # A bare {{ first_name }} prints the raw tag to anyone with no first
-        # name. The default filter degrades to an empty string instead.
-        bare = re.compile(r"\{\{\s*first_name\s*\}\}")
-        for e in bt.EMAILS:
-            with self.subTest(e["key"]):
-                self.assertIsNone(bare.search(bt.render_html(e)))
-
     def test_no_remote_images(self):
         for e in bt.EMAILS:
             with self.subTest(e["key"]):

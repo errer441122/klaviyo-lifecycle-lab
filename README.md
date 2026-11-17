@@ -41,6 +41,21 @@ the one test I ran. The results describe the test that would settle it.
 
 Full write-up, including what else broke: [`reports/results.md`](reports/results.md).
 
+## Checking an email before it goes live
+
+[`src/pre_send_check.py`](src/pre_send_check.py) checks the seven emails before
+their HTML is pasted into Klaviyo: every personalisation tag has a fallback,
+every link is a real https address, any hand-typed UTM follows the
+[taxonomy](docs/flows.md#measurement), the unsubscribe link is there, the
+subject fits on a phone (50 characters) and the preview text adds something to
+it. CI runs it on every change.
+
+Its first run flagged all seven emails that were live. Six greeted the reader
+with `Ciao {{ first_name|default:'' }},`, which reads "Ciao , grazie..." for
+anyone who signed up without a first name, and the three cart emails had no
+fallback if Shopify's checkout link is missing. Both are fixed in this
+repository; the emails in Klaviyo change when the new HTML is pasted in.
+
 ## The flows
 
 | # | Flow | Trigger | Steps |
@@ -84,8 +99,12 @@ The thresholds are the same as in my
 [CRM retention analysis](https://github.com/errer441122/digital-campaign-performance-dashboard).
 
 Consent comes first: only profiles that have already opted in are updated, and
-everyone held back is listed in a report. Nothing in this project can subscribe
-a person who did not ask for it.
+only if the consent record says where and when the consent was given, because
+under GDPR the shop must be able to show it. The source and date are written on
+the profile next to the lifecycle stage. Everyone held back is listed in a
+report, which also counts subscribers by sign-up source: that is where the
+Shopify checkbox subscribers from finding 2 show up. Nothing in this project
+can subscribe a person who did not ask for it.
 
 ## Real-World Business Application (Next Steps)
 
@@ -118,11 +137,12 @@ The lifecycle rules can be tried on the example data without any account:
 
 ```bash
 python -m unittest discover -s tests
+python src/pre_send_check.py
 python src/sync_klaviyo.py --as-of 2026-06-01
 ```
 
-This is a dry run: it prints who would be updated and who is held back for
-missing consent, and sends nothing. Writing to a real Klaviyo account needs an
+The last one is a dry run: it prints who would be updated and who is held back
+for missing or unprovable consent, and sends nothing. Writing to a real Klaviyo account needs an
 API key and the `--live` flag.
 
 ## Boundaries

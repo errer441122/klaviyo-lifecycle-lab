@@ -5,3 +5,5 @@ atrisk@example.com,opted_in,signup_form_double_optin,2025-09-05T11:02:00Z
 dormant@example.com,opted_in,signup_form_double_optin,2025-04-14T08:30:00Z
 churned@example.com,opted_in,signup_form_double_optin,2024-11-28T19:55:00Z
 optedout@example.com,opted_out,unsubscribe_link,2026-06-01T07:20:00Z
+checkbox@example.com,opted_in,shopify_checkout_checkbox,2026-04-20T15:31:00Z
+noproof@example.com,opted_in,,

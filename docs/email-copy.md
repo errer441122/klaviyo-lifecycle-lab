@@ -1,17 +1,21 @@
 # Email copy
 
 Copy for all seven emails, ready to paste into the Klaviyo template editor.
-Subject lines and internal names are already set on the flow actions; what is
-below is the body.
+Subject lines (in italics in each heading) and internal names are set on the
+flow actions; what is below is the body. The HTML that is actually pasted comes
+from `src/build_templates.py`, and `src/pre_send_check.py` checks it first.
 
 Every email must keep the footer that Klaviyo injects — the physical address
 and the one-click unsubscribe are not optional, and removing them breaks both
 the GDPR position in [`consent.md`](consent.md) and the Gmail/Yahoo bulk-sender
 rules in [`deliverability.md`](deliverability.md).
 
-Merge tags use Klaviyo syntax. `{{ first_name|default:'' }}` degrades to an
-empty string rather than printing the tag when the field is missing — the
-single most common visible bug in a first send.
+Merge tags use Klaviyo syntax. A greeting is written
+`Ciao{% if first_name %} {{ first_name }}{% endif %},` so that a profile with
+no first name reads "Ciao, ..." rather than "Ciao , ...". The first version used
+`{{ first_name|default:'' }}`: it avoids printing the raw tag, but leaves the
+stray space and comma. `src/pre_send_check.py` now refuses any merge tag whose
+fallback is empty.
 
 ---
 
@@ -19,7 +23,7 @@ single most common visible bug in a first send.
 
 ### 1.1 · Day 0 · *Benvenuto in Torrefazione Nord*
 
-> Ciao {{ first_name|default:'' }},
+> Ciao{% if first_name %} {{ first_name }}{% endif %},
 >
 > grazie per aver confermato l'iscrizione. Confermare è un passaggio in più, lo
 > sappiamo, e serve a una cosa sola: essere certi che tu voglia davvero sentirci.
@@ -45,7 +49,7 @@ lo 0,3% ci si deve stare per forza.
 
 ### 1.2 · Day 3 · *Da dove iniziare: i nostri tre caffè più scelti*
 
-> {{ first_name|default:'' }}, se è la prima volta che compri caffè in grani la
+> Ciao{% if first_name %} {{ first_name }}{% endif %}, se è la prima volta che compri caffè in grani la
 > scelta può paralizzare. Questi tre coprono quasi tutti i gusti.
 >
 > **Etiopia Yirgacheffe** — bergamotto, gelsomino, tè nero. Tostatura chiara,
@@ -76,7 +80,7 @@ gruppo di controllo, non regalato di default.
 
 ### 2.1 · 4 ore dopo · *Hai lasciato qualcosa nel carrello*
 
-> {{ first_name|default:'' }}, il tuo carrello è ancora qui.
+> Ciao{% if first_name %} {{ first_name }}{% endif %}, il tuo carrello è ancora qui.
 >
 > {% for item in event.extra.line_items %}
 > **{{ item.title }}** — {{ item.quantity }} × {{ item.price }}
@@ -91,9 +95,9 @@ gruppo di controllo, non regalato di default.
 motivo dell'abbandono — una distrazione, non un ripensamento — è ancora
 reversibile. È anche il ritardo che vale la pena testare per primo contro 1 ora.
 
-### 2.2 · 20 ore dopo · *Reso gratuito entro 30 giorni, e nessun account da creare*
+### 2.2 · 20 ore dopo · *Ti è rimasto un dubbio?*
 
-> Ti è rimasto un dubbio, {{ first_name|default:'' }}? I tre più comuni:
+> Ti è rimasto un dubbio{% if first_name %}, {{ first_name }}{% endif %}? I tre più comuni:
 >
 > **E se non mi piace?** Reso gratuito entro 30 giorni, spedizione di reso
 > a carico nostro. Il caffè è questione di gusti, non ha senso far finta di no.
@@ -111,7 +115,7 @@ all'obiezione. Ripetere "hai lasciato qualcosa" dopo venti ore è rumore.
 
 ### 2.3 · 2 giorni dopo · *Ultimo promemoria: il tuo carrello sta per scadere*
 
-> {{ first_name|default:'' }}, questo è l'ultimo messaggio sul tuo carrello —
+> Ciao{% if first_name %} {{ first_name }}{% endif %}, questo è l'ultimo messaggio sul tuo carrello —
 > poi lo lasciamo andare e non ti scriviamo più a riguardo.
 >
 > {% for item in event.extra.line_items %}
@@ -133,7 +137,7 @@ comprare è una risposta legittima.
 
 ### 3.1 · All'ingresso nel segmento · *È passato un po'. Il tuo caffè ti aspetta*
 
-> {{ first_name|default:'' }}, l'ultima volta hai preso
+> Ciao{% if first_name %} {{ first_name }}{% endif %}, l'ultima volta hai preso
 > {{ person.last_product|default:'un nostro caffè' }}. Sono passati un po' di
 > mesi — se hai finito la scorta senza accorgertene, capita.
 >
@@ -148,7 +152,7 @@ funziona senza sconto, il margine resta.
 
 ### 3.2 · 7 giorni dopo · *Un motivo in più per tornare*
 
-> {{ first_name|default:'' }}, ci proviamo una volta sola: **-15% sul prossimo
+> Ciao{% if first_name %} {{ first_name }}{% endif %}, ci proviamo una volta sola: **-15% sul prossimo
 > ordine**, codice `TORNA15`, un solo utilizzo per cliente.
 >
 > Se non fa per te nessun problema — non insistiamo oltre e questa è l'ultima
@@ -206,5 +210,6 @@ blocca la regressione: ogni durata che compare nella copy deve corrispondere a
 - [x] Creare `TORNA15` in Shopify — fatto, sconto ordine 15%, un utilizzo per cliente
 - [x] Togliere dalla copy le promesse che il negozio non pubblica
 - [x] Caricare le sette email nei flow — fatto, e `--verify` lo ricontrolla
+- [x] Controllo automatico prima di incollare: `python src/pre_send_check.py`
 - [ ] Verificare che i merge tag rendano su un invio di prova, non in anteprima
 - [ ] Controllare i blocchi prodotto dinamici del carrello con un ordine reale

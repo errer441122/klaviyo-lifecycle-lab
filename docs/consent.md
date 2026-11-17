@@ -115,6 +115,12 @@ Per the demonstrability requirement, each consent record carries:
 This is the schema `src/sync_klaviyo.py` reads. Anything whose status is not
 exactly `opted_in` is suppressed, including a profile with **no record at
 all** — absence is treated as `unknown` and suppressed, never as permission.
+An `opted_in` record with no source, or no valid timestamp on or before the
+reference date, is suppressed too, as `opted_in_without_proof`: Art. 7(1) asks
+the shop to show the consent, and one it cannot show does not count. Source
+and timestamp are copied onto the Klaviyo profile, and the sync report counts
+eligible profiles by source, so a sign-up path that skips the confirmation
+(Shopify's checkout checkbox) is visible in numbers.
 
 ## Withdrawal
 
@@ -140,9 +146,14 @@ who has not passed through that door. It cannot open it.
 Concretely, in `build_profiles()`:
 
 ```python
-status = consent.get(email, "unknown")
+record = consent.get(email, {})
+status = record.get("status", "unknown")
 if status != ELIGIBLE_CONSENT:
     suppressed[status] += 1
+    continue
+given = consent_date(record.get("timestamp", ""))
+if not record.get("source") or given is None or given > as_of:
+    suppressed["opted_in_without_proof"] += 1
     continue
 ```
 

@@ -49,11 +49,14 @@ misclassified as `Repeat`.
 | --- | --- | --- |
 | `email` | string | Lowercased and trimmed on read |
 | `consent_status` | string | Only exactly `opted_in` passes the gate |
-| `consent_source` | string | Not read by the script; kept for the audit trail |
-| `consent_timestamp` | ISO 8601 UTC | Not read by the script; kept for the audit trail |
+| `consent_source` | string | Required for `opted_in`; written on the profile |
+| `consent_timestamp` | ISO 8601 UTC | Required for `opted_in`, on or before `--as-of`; written on the profile |
 
 An email present in `orders.csv` but absent from `consent.csv` is suppressed as
-`unknown`. That is deliberate: absence of a record is not permission. See
+`unknown`. That is deliberate: absence of a record is not permission. An
+`opted_in` row with no source, or no valid date, is suppressed as
+`opted_in_without_proof`, because a consent the shop cannot show does not
+count. See
 [`../docs/consent.md`](../docs/consent.md).
 
 ## Reproducing the example run
@@ -66,5 +69,8 @@ python src/sync_klaviyo.py --as-of 2026-06-01
 stage, is reproducible. Without it the script uses today and the example
 output drifts — every customer eventually ages into `Churned`.
 
-Expected: 7 customers in, 5 eligible across all five stages, 2 suppressed
-(one `opted_out`, one with no consent record).
+Expected: 9 customers in, 6 eligible across all five stages, 3 suppressed (one
+`opted_out`, one with no consent record, one `opted_in` with no source or date).
+The report counts the eligible ones by sign-up source: five confirmed through
+the double opt-in form, one through Shopify's checkout checkbox, which skips
+the confirmation.

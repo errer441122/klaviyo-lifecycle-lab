@@ -69,7 +69,11 @@ class TestConsentGate(unittest.TestCase):
         "no@example.com": {"orders": 9, "last": date(2026, 5, 20), "monetary": 900.0},
         "missing@example.com": {"orders": 5, "last": date(2026, 5, 20), "monetary": 500.0},
     }
-    CONSENT = {"yes@example.com": "opted_in", "no@example.com": "opted_out"}
+    PROOF = {"source": "signup_form_double_optin", "timestamp": "2026-05-18T09:12:00Z"}
+    CONSENT = {
+        "yes@example.com": {"status": "opted_in", **PROOF},
+        "no@example.com": {"status": "opted_out", **PROOF},
+    }
 
     def setUp(self):
         self.profiles, self.report = sk.build_profiles(
@@ -101,6 +105,26 @@ class TestConsentGate(unittest.TestCase):
         self.assertNotIn(
             "no@example.com", [p["attributes"]["email"] for p in self.profiles]
         )
+
+    def test_consent_source_and_date_are_written_on_the_profile(self):
+        props = self.profiles[0]["attributes"]["properties"]
+        self.assertEqual(props["consent_source"], "signup_form_double_optin")
+        self.assertEqual(props["consent_timestamp"], "2026-05-18T09:12:00Z")
+        self.assertEqual(self.report["eligible_by_consent_source"], {"signup_form_double_optin": 1})
+
+    def test_opted_in_without_proof_is_suppressed(self):
+        # GDPR Art. 7(1): consent the shop cannot show, it does not have.
+        orders = {"a@example.com": self.ORDERS["yes@example.com"]}
+        for record in (
+            {"status": "opted_in", "source": "", "timestamp": "2026-05-18T09:12:00Z"},
+            {"status": "opted_in", "source": "popup", "timestamp": ""},
+            {"status": "opted_in", "source": "popup", "timestamp": "yesterday"},
+            {"status": "opted_in", "source": "popup", "timestamp": "2026-07-01T10:00:00Z"},  # after as_of
+        ):
+            with self.subTest(record=record):
+                profiles, report = sk.build_profiles(orders, {"a@example.com": record}, self.AS_OF)
+                self.assertEqual(profiles, [])
+                self.assertEqual(report["suppressed_by_reason"], {"opted_in_without_proof": 1})
 
     def test_stage_property_is_written(self):
         props = self.profiles[0]["attributes"]["properties"]

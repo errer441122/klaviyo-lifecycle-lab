@@ -16,6 +16,8 @@ jobs:
           python-version: "3.11"
       - name: Unit tests (stdlib only, no network)
         run: python -m unittest discover -s tests
+      - name: Pre-send check on the seven flow emails
+        run: python src/pre_send_check.py
       - name: Templates render and sync dry-run works end to end
         run: |
           python src/build_templates.py --out build/

@@ -148,4 +148,6 @@ anyone — see [`consent.md`](consent.md).
 - [ ] Unsubscribe link renders and resolves in the footer of every template
 - [ ] Reply-to is a monitored address, not `noreply@`
 - [ ] Plain-text alternative present and readable
-- [ ] Every link carries the UTM parameters from `flows.md`
+- [ ] Every link carries the UTM parameters from `flows.md`: click each one in
+      the test send (Klaviyo adds them at send time, so the template alone
+      cannot show it)

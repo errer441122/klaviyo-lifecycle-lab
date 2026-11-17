@@ -66,6 +66,13 @@ FLOW_TEMPLATES = {
 BRAND = "Torrefazione Nord"
 SITE = "https://negozio-1-om2cqkph.myshopify.com"
 
+# A greeting that reads "Ciao," for a profile with no first name. The earlier
+# `Ciao {{ first_name|default:'' }},` printed "Ciao ," and pre_send_check.py
+# now refuses any merge tag whose fallback is empty.
+HI = "Ciao{% if first_name %} {{ first_name }}{% endif %},"
+# Shopify's checkout link, with the cart page as the fallback if it is missing.
+CART_URL = "{{ event.extra.checkout_url|default:'" + SITE + "/cart' }}"
+
 # What the storefront actually backs, read off the Shopify settings rather than
 # assumed. Copy that states something about the store has to match this, or the
 # email is writing a cheque the checkout will not cash — the failure nobody
@@ -79,6 +86,9 @@ STORE_FACTS = {
     "shipping_sla": None,         # no rate with a delivery estimate is published
 }
 
+# Subjects are set on the flow actions in Klaviyo and copied here as the flow
+# canvas shows them (assets/flow-*.png), so pre_send_check.py can measure them.
+# A subject changed here must be changed there by hand, like the HTML.
 # Copy mirrors docs/email-copy.md. Kept as data rather than parsed out of the
 # markdown: a parser tied to heading levels breaks the moment the document is
 # reorganised, and the document is written for people, not for a machine.
@@ -86,10 +96,11 @@ EMAILS: list[dict] = [
     {
         "key": "1.1",
         "name": "1.1 Benvenuto + cosa aspettarti",
+        "subject": "Benvenuto in Torrefazione Nord",
         "preheader": "Cosa aspettarti da noi, e ogni quanto ti scriviamo.",
         "heading": "Benvenuto in Torrefazione Nord",
         "body": [
-            "Ciao {{ first_name|default:'' }}, grazie per aver confermato "
+            f"{HI} grazie per aver confermato "
             "l'iscrizione. Confermare e un passaggio in piu, lo sappiamo, e "
             "serve a una cosa sola: essere certi che tu voglia davvero sentirci.",
             "<b>Cosa aspettarti.</b> Ti scriviamo circa due volte al mese. "
@@ -106,10 +117,11 @@ EMAILS: list[dict] = [
     {
         "key": "1.2",
         "name": "1.2 Orientamento - i piu scelti",
+        "subject": "Da dove iniziare: i nostri tre caffe piu scelti",
         "preheader": "Tre caffe che coprono quasi tutti i gusti.",
         "heading": "Da dove iniziare",
         "body": [
-            "{{ first_name|default:'' }}, se e la prima volta che compri caffe "
+            f"{HI} se e la prima volta che compri caffe "
             "in grani la scelta puo paralizzare. Questi tre coprono quasi tutti "
             "i gusti.",
             "<b>Etiopia Yirgacheffe</b> — bergamotto, gelsomino, te nero. "
@@ -126,18 +138,20 @@ EMAILS: list[dict] = [
     {
         "key": "2.1",
         "name": "2.1 Ancora interessato?",
+        "subject": "Hai lasciato qualcosa nel carrello",
         "preheader": "Il tuo carrello e ancora qui.",
         "heading": "Hai lasciato qualcosa nel carrello",
         "body": [
-            "{{ first_name|default:'' }}, il tuo carrello e ancora qui.",
+            f"{HI} il tuo carrello e ancora qui.",
             "Lo teniamo da parte, ma le scorte no: alcune monorigine escono in "
             "lotti piccoli e finiscono.",
         ],
-        "cta": ("Riprendi l'ordine", "{{ event.extra.checkout_url }}"),
+        "cta": ("Riprendi l'ordine", CART_URL),
     },
     {
         "key": "2.2",
         "name": "2.2 Rassicurazione - spedizione e resi",
+        "subject": "Ti e rimasto un dubbio?",
         "preheader": "Reso gratuito entro 30 giorni, e nessun account da creare.",
         "heading": "Ti e rimasto un dubbio?",
         "body": [
@@ -149,28 +163,30 @@ EMAILS: list[dict] = [
             "<b>Quanto costa la spedizione?</b> Te lo diciamo al check-out, "
             "prima del pagamento. Nessun costo che compare all'ultimo passaggio.",
         ],
-        "cta": ("Completa l'ordine", "{{ event.extra.checkout_url }}"),
+        "cta": ("Completa l'ordine", CART_URL),
     },
     {
         "key": "2.3",
         "name": "2.3 Ultimo promemoria",
+        "subject": "Ultimo promemoria: il tuo carrello sta per scadere",
         "preheader": "Ultimo messaggio sul tuo carrello.",
         "heading": "Il tuo carrello sta per scadere",
         "body": [
-            "{{ first_name|default:'' }}, questo e l'ultimo messaggio sul tuo "
+            f"{HI} questo e l'ultimo messaggio sul tuo "
             "carrello — poi lo lasciamo andare e non ti scriviamo piu a riguardo.",
             "Se hai cambiato idea va benissimo. Se invece era solo il momento "
             "sbagliato, e ancora tutto qui.",
         ],
-        "cta": ("Riprendi l'ordine", "{{ event.extra.checkout_url }}"),
+        "cta": ("Riprendi l'ordine", CART_URL),
     },
     {
         "key": "3.1",
         "name": "3.1 E passato un po",
+        "subject": "E passato un po. Il tuo caffe ti aspetta",
         "preheader": "Se hai finito la scorta senza accorgertene, capita.",
         "heading": "E passato un po'",
         "body": [
-            "{{ first_name|default:'' }}, sono passati alcuni mesi dal tuo "
+            f"{HI} sono passati alcuni mesi dal tuo "
             "ultimo ordine. Se hai finito la scorta senza accorgertene, capita.",
             "Nel frattempo e cambiato qualcosa: le origini ruotano con il "
             "raccolto, quindi il profilo che ti piaceva potrebbe avere una "
@@ -181,10 +197,11 @@ EMAILS: list[dict] = [
     {
         "key": "3.2",
         "name": "3.2 Offerta di riattivazione (unica)",
+        "subject": "Un motivo in piu per tornare",
         "preheader": "Una sola offerta, poi non insistiamo.",
         "heading": "Un motivo in piu per tornare",
         "body": [
-            "{{ first_name|default:'' }}, ci proviamo una volta sola: "
+            f"{HI} ci proviamo una volta sola: "
             "<b>-15% sul prossimo ordine</b>, codice <b>TORNA15</b>, un solo "
             "utilizzo per cliente.",
             "Se non fa per te nessun problema — non insistiamo oltre e questa e "

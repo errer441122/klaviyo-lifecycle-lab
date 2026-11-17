@@ -92,39 +92,62 @@ def read_orders(path: Path, as_of: date | None = None) -> dict[str, dict]:
     return agg
 
 
-def read_consent(path: Path) -> dict[str, str]:
-    """Consent status per email, as exported from the signup form / ESP.
+def read_consent(path: Path) -> dict[str, dict]:
+    """Consent record per email, as exported from the signup form / ESP.
 
-    Expected columns: email, consent_status. Anything that is not exactly
-    opted_in is treated as not consenting.
+    Expected columns: email, consent_status, consent_source, consent_timestamp
+    (ISO 8601). Anything that is not exactly opted_in is treated as not
+    consenting; see build_profiles() for what an opted_in record also needs.
     """
-    out: dict[str, str] = {}
+    out: dict[str, dict] = {}
     with path.open(newline="", encoding="utf-8") as fh:
         for row in csv.DictReader(fh):
             email = (row.get("email") or "").strip().lower()
             if email:
-                out[email] = (row.get("consent_status") or "unknown").strip()
+                out[email] = {
+                    "status": (row.get("consent_status") or "unknown").strip(),
+                    "source": (row.get("consent_source") or "").strip(),
+                    "timestamp": (row.get("consent_timestamp") or "").strip(),
+                }
     return out
 
 
+def consent_date(timestamp: str) -> date | None:
+    """Date of an ISO 8601 consent timestamp, or None if it is not one."""
+    try:
+        return datetime.fromisoformat(timestamp).date()
+    except ValueError:
+        return None
+
+
 def build_profiles(
-    orders: dict[str, dict], consent: dict[str, str], as_of: date
+    orders: dict[str, dict], consent: dict[str, dict], as_of: date
 ) -> tuple[list[dict], dict]:
     """Return (profiles to sync, suppression report).
 
     The consent gate is hard: it is applied before anything else and is never
     a scoring term. A customer with no consent record is suppressed as
-    unknown, not optimistically included.
+    unknown, not optimistically included. An opted_in record also needs a
+    source and a date on or before as_of: GDPR asks the shop to be able to
+    show how and when each person consented (Art. 7(1)), and a consent it
+    cannot show is treated as missing.
     """
     profiles: list[dict] = []
     suppressed: dict[str, int] = defaultdict(int)
     by_stage: dict[str, int] = defaultdict(int)
+    by_source: dict[str, int] = defaultdict(int)
 
     for email, a in sorted(orders.items()):
-        status = consent.get(email, "unknown")
+        record = consent.get(email, {})
+        status = record.get("status", "unknown")
         if status != ELIGIBLE_CONSENT:
             suppressed[status] += 1
             continue
+        given = consent_date(record.get("timestamp", ""))
+        if not record.get("source") or given is None or given > as_of:
+            suppressed["opted_in_without_proof"] += 1
+            continue
+        by_source[record["source"]] += 1
         recency = (as_of - a["last"]).days
         stage = lifecycle_stage(recency, a["orders"])
         by_stage[stage] += 1
@@ -147,6 +170,10 @@ def build_profiles(
                         # reading it in the ESP can see it was pinned.
                         "lifecycle_computed_at": date.today().isoformat(),
                         "lifecycle_as_of": as_of.isoformat(),
+                        # Where and when the person consented, next to the
+                        # stage, so a segment can tell sign-up sources apart.
+                        "consent_source": record["source"],
+                        "consent_timestamp": record["timestamp"],
                     },
                 },
             }
@@ -159,6 +186,7 @@ def build_profiles(
         "suppressed": sum(suppressed.values()),
         "suppressed_by_reason": dict(suppressed),
         "eligible_by_stage": {s: by_stage[s] for s in LIFECYCLE_ORDER if by_stage[s]},
+        "eligible_by_consent_source": dict(sorted(by_source.items())),
     }
     return profiles, report
 
