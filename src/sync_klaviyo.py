@@ -16,6 +16,11 @@ What this script does NOT do, on purpose:
   guessed. The public dataset used in the analysis repo is anonymous
   (customer ids, no contacts), which is exactly why it cannot be synced.
 
+It reads a store's own files: the orders export straight from Shopify
+(Orders > Export, no editing needed) and the consent export from the signup
+form or ESP. Besides the Klaviyo sync it can write the suppression list, one
+row per person held back and why, for the team to exclude from campaigns.
+
 Segments and flows live in Klaviyo, not here: the property set below is read
 by a Klaviyo segment definition, and the flow triggers on segment entry. See
 `docs/flows.md`.
@@ -52,6 +57,11 @@ STAGE_ACTION = {
 }
 ELIGIBLE_CONSENT = "opted_in"
 
+# A raw Shopify orders export (Orders > Export) is recognised by these columns.
+# It has one row per line item, and order-level fields sit on the first row.
+SHOPIFY_COLUMNS = {"Name", "Email", "Created at", "Total"}
+NOT_A_SALE = {"refunded", "voided"}  # Shopify "Financial Status" values
+
 
 def lifecycle_stage(recency_days: int, orders: int) -> str:
     """Same thresholds as crm_lifecycle.real_lifecycle() in the analysis repo."""
@@ -64,31 +74,54 @@ def lifecycle_stage(recency_days: int, orders: int) -> str:
     return "Churned"
 
 
+def order_rows(path: Path):
+    """Yield (email, YYYY-MM-DD, value) once per order.
+
+    Reads this repo's simple format (email, order_date, order_value_eur) or a
+    raw Shopify orders export. In the Shopify file the line items of one order
+    are folded into one order, and cancelled, refunded and voided orders are
+    skipped: they are not purchases.
+    """
+    with path.open(newline="", encoding="utf-8-sig") as fh:  # -sig: Excel adds a BOM
+        reader = csv.DictReader(fh)
+        if not SHOPIFY_COLUMNS <= set(reader.fieldnames or ()):
+            for row in reader:
+                yield row.get("email"), row.get("order_date"), row.get("order_value_eur")
+            return
+        orders: dict[str, dict] = {}
+        for row in reader:
+            order = orders.setdefault(row["Name"], {})
+            for k, v in row.items():
+                if v and not order.get(k):
+                    order[k] = v
+        for o in orders.values():
+            if o.get("Cancelled at") or o.get("Financial Status", "").lower() in NOT_A_SALE:
+                continue
+            yield o.get("Email"), (o.get("Created at") or "")[:10], o.get("Total")
+
+
 def read_orders(path: Path, as_of: date | None = None) -> dict[str, dict]:
     """Aggregate an orders export to one row per email.
 
-    Expected columns: email, order_date (YYYY-MM-DD), order_value_eur.
-    A Shopify export needs renaming to these three; see data/README.md.
+    Takes either file format order_rows() reads; see data/README.md.
 
     Orders dated after `as_of` are ignored: with a pinned --as-of they have
     not happened yet, and counting them gives a negative recency that files
     a lapsed customer as "New".
     """
     agg: dict[str, dict] = {}
-    with path.open(newline="", encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            email = (row.get("email") or "").strip().lower()
-            if not email:
-                continue
-            order_date = datetime.strptime(row["order_date"].strip(), "%Y-%m-%d").date()
-            if as_of and order_date > as_of:
-                continue
-            value = float(row.get("order_value_eur") or 0)
-            a = agg.setdefault(email, {"orders": 0, "last": order_date, "monetary": 0.0})
-            a["orders"] += 1
-            a["monetary"] += value
-            if order_date > a["last"]:
-                a["last"] = order_date
+    for email, day, value in order_rows(path):
+        email = (email or "").strip().lower()
+        if not email or not day:
+            continue
+        order_date = datetime.strptime(day.strip(), "%Y-%m-%d").date()
+        if as_of and order_date > as_of:
+            continue
+        a = agg.setdefault(email, {"orders": 0, "last": order_date, "monetary": 0.0})
+        a["orders"] += 1
+        a["monetary"] += float(value or 0)
+        if order_date > a["last"]:
+            a["last"] = order_date
     return agg
 
 
@@ -122,8 +155,8 @@ def consent_date(timestamp: str) -> date | None:
 
 def build_profiles(
     orders: dict[str, dict], consent: dict[str, dict], as_of: date
-) -> tuple[list[dict], dict]:
-    """Return (profiles to sync, suppression report).
+) -> tuple[list[dict], dict, list[tuple[str, str]]]:
+    """Return (profiles to sync, report, suppression list of (email, reason)).
 
     The consent gate is hard: it is applied before anything else and is never
     a scoring term. A customer with no consent record is suppressed as
@@ -133,6 +166,7 @@ def build_profiles(
     cannot show is treated as missing.
     """
     profiles: list[dict] = []
+    held: list[tuple[str, str]] = []
     suppressed: dict[str, int] = defaultdict(int)
     by_stage: dict[str, int] = defaultdict(int)
     by_source: dict[str, int] = defaultdict(int)
@@ -142,10 +176,12 @@ def build_profiles(
         status = record.get("status", "unknown")
         if status != ELIGIBLE_CONSENT:
             suppressed[status] += 1
+            held.append((email, status))
             continue
         given = consent_date(record.get("timestamp", ""))
         if not record.get("source") or given is None or given > as_of:
             suppressed["opted_in_without_proof"] += 1
+            held.append((email, "opted_in_without_proof"))
             continue
         by_source[record["source"]] += 1
         recency = (as_of - a["last"]).days
@@ -188,7 +224,7 @@ def build_profiles(
         "eligible_by_stage": {s: by_stage[s] for s in LIFECYCLE_ORDER if by_stage[s]},
         "eligible_by_consent_source": dict(sorted(by_source.items())),
     }
-    return profiles, report
+    return profiles, report, held
 
 
 def _payload(batch: list[dict], list_id: str) -> dict:
@@ -261,6 +297,11 @@ def main(argv: list[str] | None = None) -> int:
         help="actually call Klaviyo; without it nothing leaves the machine",
     )
     p.add_argument("--report", type=Path, default=Path("reports/sync_report.json"))
+    p.add_argument(
+        "--suppressed",
+        type=Path,
+        help="write the suppression list here (email, reason), e.g. reports/suppressed.csv",
+    )
     args = p.parse_args(argv)
 
     as_of = (
@@ -268,9 +309,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     orders = read_orders(args.orders, as_of)
     consent = read_consent(args.consent)
-    profiles, report = build_profiles(orders, consent, as_of)
+    profiles, report, held = build_profiles(orders, consent, as_of)
 
     print(json.dumps(report, indent=2))
+    if args.suppressed:
+        args.suppressed.parent.mkdir(parents=True, exist_ok=True)
+        with args.suppressed.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh, lineterminator="\n")
+            w.writerow(["email", "reason"])
+            w.writerows(held)
+        who = "person" if len(held) == 1 else "people"
+        print(f"\nsuppression list ({len(held)} {who}) -> {args.suppressed}")
     if not profiles:
         print("\nNothing eligible to sync - the consent gate suppressed everyone.")
         return 0

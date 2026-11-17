@@ -13,17 +13,23 @@ fine in the editor and only breaks for some recipients:
 - a subject longer than a phone shows, or a preview text that repeats it
 
     python src/pre_send_check.py
+    python src/pre_send_check.py welcome.html --subject "Benvenuto" --preview "..."
 
-Checks the seven flow emails in build_templates.py and exits 1 if any of them
-has a problem, so CI fails before a broken template reaches Klaviyo.
+With no files it checks the seven flow emails in build_templates.py; CI runs
+it that way, so a broken template fails the build before it reaches Klaviyo.
+With files it checks any Klaviyo template: copy the HTML out of the code
+editor into a file. Subject and preview text are checked only if given.
+Exits 1 if anything needs fixing.
 
 Pure standard library.
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from build_templates import EMAILS, render_html, render_text
@@ -75,36 +81,61 @@ def _plain(s: str) -> str:
     return re.sub(r"\W+", "", s).lower()
 
 
-def check(subject: str, preheader: str, html: str, text: str) -> list[str]:
-    """Problems a recipient would see. An empty list means ready to paste."""
+def check(html: str, text: str | None = None, subject: str | None = None,
+          preheader: str | None = None) -> list[str]:
+    """Problems a recipient would see. An empty list means ready to paste.
+
+    A part passed as None is not checked: a template copied out of Klaviyo is
+    only the HTML, the subject lives on the flow action.
+    """
     problems = [p for tag in _unguarded_tags(html) if (p := _fallback_problem(tag))]
     problems += _link_problems(html)
-    if "{% unsubscribe %}" not in html or "{% unsubscribe %}" not in text:
+    if "{% unsubscribe %}" not in html or (text is not None and "{% unsubscribe %}" not in text):
         problems.append("no {% unsubscribe %} link in the HTML or the plain-text part")
-    subject, preheader = subject.strip(), preheader.strip()
-    if not subject:
-        problems.append("no subject")
-    elif len(subject) > MAX_SUBJECT:
-        problems.append(f"subject is {len(subject)} characters; a phone cuts it at about {MAX_SUBJECT}")
-    if not preheader:
-        problems.append("no preview text: the inbox shows the first line of the email instead")
-    elif _plain(preheader) == _plain(subject):
-        problems.append("preview text repeats the subject")
+    if subject is not None:
+        subject = subject.strip()
+        if not subject:
+            problems.append("no subject")
+        elif len(subject) > MAX_SUBJECT:
+            problems.append(f"subject is {len(subject)} characters; a phone cuts it at about {MAX_SUBJECT}")
+    if preheader is not None:
+        preheader = preheader.strip()
+        if not preheader:
+            problems.append("no preview text: the inbox shows the first line of the email instead")
+        elif subject and _plain(preheader) == _plain(subject):
+            problems.append("preview text repeats the subject")
     return problems
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description="Check email templates before they go live.")
+    p.add_argument("files", nargs="*", type=Path,
+                   help="HTML templates copied out of Klaviyo (default: the seven flow emails here)")
+    p.add_argument("--subject", help="subject line to check together with the files")
+    p.add_argument("--preview", help="preview text to check together with the files")
+    args = p.parse_args(argv)
+
+    if args.files:
+        results = [
+            (f.name, args.subject or "",
+             check(f.read_text(encoding="utf-8", errors="replace"), None, args.subject, args.preview))
+            for f in args.files
+        ]
+    else:
+        results = [
+            (e["key"], e["subject"], check(render_html(e), render_text(e), e["subject"], e["preheader"]))
+            for e in EMAILS
+        ]
     failed = 0
-    for e in EMAILS:
-        problems = check(e.get("subject", ""), e.get("preheader", ""), render_html(e), render_text(e))
+    for name, subject, problems in results:
         failed += bool(problems)
-        print(f"  {e['key']}  {'FIX' if problems else 'ok '}  {e.get('subject', '')}")
-        for p in problems:
-            print(f"         - {p}")
-    print(f"\n{len(EMAILS) - failed} of {len(EMAILS)} emails ready to paste.")
+        print(f"  {name}  {'FIX' if problems else 'ok '}  {subject}")
+        for problem in problems:
+            print(f"         - {problem}")
+    print(f"\n{len(results) - failed} of {len(results)} ready to paste.")
     return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8")  # subjects carry accents; Windows consoles default to cp1252
+    sys.stdout.reconfigure(encoding="utf-8")  # subjects may carry accents; Windows consoles default to cp1252
     raise SystemExit(main())

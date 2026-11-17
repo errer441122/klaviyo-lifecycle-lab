@@ -5,6 +5,29 @@ double opt-in, abandoned cart and win-back. I set up the accounts,
 authenticated the sending domain and sent the flows for real, to see what
 actually happens between "the flow is drawn" and "the email arrives".
 
+## Use it on your own store
+
+Three tools that run on the files a Shopify + Klaviyo team already has. Nothing
+is sent anywhere unless you add `--live` and a Klaviyo API key.
+
+| Task | Command | What you get |
+| --- | --- | --- |
+| Check a template before it goes live | `python src/pre_send_check.py email.html --subject "..."` | Every problem a recipient would see: a greeting that reads "Ciao ,", a dead link, a hand-typed UTM that breaks the naming rules, no unsubscribe link, a subject cut off on a phone |
+| Lifecycle stages from a Shopify orders export | `python src/sync_klaviyo.py --orders orders_export.csv --consent consent.csv --suppressed suppressed.csv` | Each customer's stage (New, Repeat, At risk, Dormant, Churned), written to Klaviyo only for people whose consent has a recorded source and date, plus the list of everyone held back and why |
+| Time the second-order email | `python src/repeat_timing.py --orders orders_export.csv` | The share of customers who order again by day 30, 60, 90, 180 and 365, and the delay to put in the post-purchase flow |
+
+The orders file is the Shopify export as it comes out of *Orders > Export*: the
+line items of each order are folded into one order, and cancelled, refunded and
+voided orders are left out. Files and columns: [`data/README.md`](data/README.md).
+
+So far the Shopify reading is tested on handwritten files in Shopify's export
+layout ([`data/shopify_orders_example.csv`](data/shopify_orders_example.csv)),
+not on a large store. The timing tool was also run on the 36,969 real orders of
+the public UCI dataset and gives the same result as my
+[analysis repo](https://github.com/errer441122/digital-campaign-performance-dashboard):
+3,359 customers with a full year of data, half of those who came back within 71
+days.
+
 ## What is real and what is not
 
 | Real | Not real |
@@ -44,7 +67,8 @@ Full write-up, including what else broke: [`reports/results.md`](reports/results
 ## Checking an email before it goes live
 
 [`src/pre_send_check.py`](src/pre_send_check.py) checks the seven emails before
-their HTML is pasted into Klaviyo: every personalisation tag has a fallback,
+their HTML is pasted into Klaviyo, and any other Klaviyo template copied into a
+file: every personalisation tag has a fallback,
 every link is a real https address, any hand-typed UTM follows the
 [taxonomy](docs/flows.md#measurement), the unsubscribe link is there, the
 subject fits on a phone (50 characters) and the preview text adds something to
@@ -138,11 +162,14 @@ The lifecycle rules can be tried on the example data without any account:
 ```bash
 python -m unittest discover -s tests
 python src/pre_send_check.py
-python src/sync_klaviyo.py --as-of 2026-06-01
+python src/sync_klaviyo.py --orders data/shopify_orders_example.csv --as-of 2026-06-01 --suppressed reports/suppressed.csv
+python src/repeat_timing.py --orders data/shopify_orders_example.csv
 ```
 
-The last one is a dry run: it prints who would be updated and who is held back
-for missing or unprovable consent, and sends nothing. Writing to a real Klaviyo account needs an
+The sync is a dry run: it prints who would be updated and who is held back for
+missing or unprovable consent, writes the suppression list, and sends nothing.
+The timing tool will say that the example covers only five months: it needs
+customers with a full year of data after their first order. Writing to a real Klaviyo account needs an
 API key and the `--live` flag.
 
 ## Boundaries

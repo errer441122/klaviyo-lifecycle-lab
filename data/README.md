@@ -7,11 +7,13 @@ gitignored.
 | File | Committed | Source |
 | --- | --- | --- |
 | `orders_example.csv` | yes | Handwritten, `example.com` addresses |
+| `shopify_orders_example.csv` | yes | Handwritten in the layout of a Shopify orders export, `example.com` addresses |
 | `consent_example.csv` | yes | Handwritten, `example.com` addresses |
 | `orders.csv` | **no** | Store order export |
 | `consent.csv` | **no** | ESP / signup form export |
 
-The real files are gitignored because they contain personal data. Committing a
+Every CSV here except the `*_example.csv` files is gitignored, and so is every
+list the scripts write into `reports/`, because they contain personal data. Committing a
 subscriber list to a public repository is a personal data breach, not an
 oversight — there is no anonymisation step that makes it acceptable, so the
 files simply never enter git.
@@ -27,21 +29,20 @@ files simply never enter git.
 Extra columns are ignored, so an export can be passed through unmodified as
 long as these three exist.
 
-### From a Shopify export
+### Or the Shopify export as it is
 
-`Orders > Export > Orders by date`. The export gives one row per line item,
-with the customer email repeated and the order total only on the first row of
-each order. Rename and deduplicate:
+`Orders > Export`, CSV. No editing needed: the scripts recognise the file by
+its columns (`Name`, `Email`, `Created at`, `Total`) and then
 
-| Shopify column | Becomes |
-| --- | --- |
-| `Email` | `email` |
-| `Created at` | `order_date` (truncate the time portion) |
-| `Total` | `order_value_eur` |
+- fold the line items of each order into one order (the export has one row per
+  line item, with the order total only on the first one), so a five-item order
+  is not counted as five orders;
+- skip orders that were cancelled (`Cancelled at` filled in), refunded or
+  voided (`Financial Status`), because they are not purchases;
+- take the order date from `Created at` and the value from `Total`.
 
-Keep only rows where `Total` is non-empty — those are the order-level rows.
-Otherwise a five-item order counts as five orders and the customer is
-misclassified as `Repeat`.
+A file saved again from Excel starts with an invisible byte-order mark; that is
+handled too.
 
 ## `consent.csv`
 

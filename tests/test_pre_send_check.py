@@ -7,7 +7,10 @@ Run from the repository root:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,14 +26,14 @@ LINK = '<a href="https://shop.example/collections/all">Vai</a>'
 def problems(body: str = "", subject: str = "Oggetto breve", preheader: str = "Un'anteprima diversa",
              unsub: str = UNSUB) -> list[str]:
     html = f"<p>{body}</p>{LINK}{unsub}"
-    return psc.check(subject, preheader, html, f"{body} {unsub}")
+    return psc.check(html, f"{body} {unsub}", subject, preheader)
 
 
 class TestTheSevenFlowEmails(unittest.TestCase):
     def test_every_flow_email_is_ready_to_paste(self):
         for e in bt.EMAILS:
             with self.subTest(e["key"]):
-                self.assertEqual(psc.check(e["subject"], e["preheader"], bt.render_html(e), bt.render_text(e)), [])
+                self.assertEqual(psc.check(bt.render_html(e), bt.render_text(e), e["subject"], e["preheader"]), [])
 
 
 class TestWhatItCatches(unittest.TestCase):
@@ -74,6 +77,35 @@ class TestWhatItCatches(unittest.TestCase):
     def test_preview_text_must_add_something(self):
         self.assertTrue(problems(subject="Reso gratuito", preheader="Reso gratuito."))
         self.assertTrue(problems(preheader=""))
+
+
+class TestAnyTemplateFile(unittest.TestCase):
+    """The check runs on any Klaviyo template copied into a file, not only on this repo's."""
+
+    def run_on(self, html: str, *flags: str) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "template.html"
+            path.write_text(html, encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = psc.main([str(path), *flags])
+        return code, out.getvalue()
+
+    def test_a_good_file_passes_without_subject_or_preview(self):
+        code, out = self.run_on(f"<p>Ciao</p>{LINK}{UNSUB}")
+        self.assertEqual(code, 0, out)
+
+    def test_a_broken_file_fails_and_says_why(self):
+        code, out = self.run_on('<p>Ciao {{ first_name }}</p><a href="#">x</a>')
+        self.assertEqual(code, 1)
+        self.assertIn("has no fallback", out)
+        self.assertIn("link goes nowhere", out)
+        self.assertIn("unsubscribe", out)
+
+    def test_subject_is_checked_when_given(self):
+        code, out = self.run_on(f"<p>Ciao</p>{LINK}{UNSUB}", "--subject", "x" * 60)
+        self.assertEqual(code, 1)
+        self.assertIn("60 characters", out)
 
 
 if __name__ == "__main__":

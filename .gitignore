@@ -1,7 +1,9 @@
-# Real exports never get committed - only the example files do.
-data/orders.csv
-data/consent.csv
+# Real exports never get committed - only the example files do. They hold
+# personal data, and so does every list the scripts write from them.
+data/*.csv
+!data/*_example.csv
 reports/sync_report.json
+reports/*.csv
 .env
 __pycache__/
 *.pyc

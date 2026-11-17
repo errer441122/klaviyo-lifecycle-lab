@@ -60,6 +60,29 @@ class TestReadOrders(unittest.TestCase):
             self.assertEqual(sk.read_orders(path)["a@example.com"]["orders"], 2)
 
 
+class TestShopifyExport(unittest.TestCase):
+    """A raw Shopify orders export is read as it comes out of the admin."""
+
+    PATH = Path(__file__).resolve().parents[1] / "data" / "shopify_orders_example.csv"
+
+    def test_line_items_fold_into_orders_and_non_sales_are_skipped(self):
+        orders = sk.read_orders(self.PATH)
+        # #1001 has two line items but is one order.
+        self.assertEqual(orders["repeat@example.com"]["orders"], 3)
+        self.assertAlmostEqual(orders["repeat@example.com"]["monetary"], 269.50)
+        # #1005 was cancelled (voided), #1007 refunded: neither is a purchase.
+        self.assertEqual(orders["atrisk@example.com"]["orders"], 1)
+        self.assertEqual(orders["new@example.com"]["orders"], 1)
+        self.assertEqual(orders["new@example.com"]["last"], date(2026, 5, 20))
+
+    def test_a_byte_order_mark_from_excel_does_not_hide_the_columns(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / "export.csv"
+            copy.write_text(self.PATH.read_text(encoding="utf-8"), encoding="utf-8-sig")
+            self.assertEqual(sk.read_orders(copy), sk.read_orders(self.PATH))
+
+
 class TestConsentGate(unittest.TestCase):
     """Consent is a hard gate applied before anything else."""
 
@@ -76,13 +99,19 @@ class TestConsentGate(unittest.TestCase):
     }
 
     def setUp(self):
-        self.profiles, self.report = sk.build_profiles(
+        self.profiles, self.report, self.held = sk.build_profiles(
             self.ORDERS, self.CONSENT, self.AS_OF
         )
 
     def test_only_opted_in_profiles_are_built(self):
         emails = [p["attributes"]["email"] for p in self.profiles]
         self.assertEqual(emails, ["yes@example.com"])
+
+    def test_suppression_list_names_each_person_and_reason(self):
+        self.assertEqual(
+            sorted(self.held),
+            [("missing@example.com", "unknown"), ("no@example.com", "opted_out")],
+        )
 
     def test_absent_consent_record_is_suppressed_not_assumed(self):
         self.assertEqual(self.report["suppressed_by_reason"]["unknown"], 1)
@@ -122,7 +151,7 @@ class TestConsentGate(unittest.TestCase):
             {"status": "opted_in", "source": "popup", "timestamp": "2026-07-01T10:00:00Z"},  # after as_of
         ):
             with self.subTest(record=record):
-                profiles, report = sk.build_profiles(orders, {"a@example.com": record}, self.AS_OF)
+                profiles, report, _ = sk.build_profiles(orders, {"a@example.com": record}, self.AS_OF)
                 self.assertEqual(profiles, [])
                 self.assertEqual(report["suppressed_by_reason"], {"opted_in_without_proof": 1})
 

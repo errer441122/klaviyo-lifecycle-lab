@@ -22,3 +22,5 @@ jobs:
         run: |
           python src/build_templates.py --out build/
           python src/sync_klaviyo.py --as-of 2026-06-01 --report build/sync_report.json
+          python src/sync_klaviyo.py --orders data/shopify_orders_example.csv --as-of 2026-06-01 --report build/shopify_report.json --suppressed build/suppressed.csv
+          python src/repeat_timing.py --orders data/shopify_orders_example.csv
