@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import os
 import sys
@@ -61,6 +62,50 @@ ELIGIBLE_CONSENT = "opted_in"
 # It has one row per line item, and order-level fields sit on the first row.
 SHOPIFY_COLUMNS = {"Name", "Email", "Created at", "Total"}
 NOT_A_SALE = {"refunded", "voided"}  # Shopify "Financial Status" values
+DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y")
+VALUE_COLUMNS = ("order_value_eur", "order_value", "value", "total", "order_value_gbp")
+FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def safe_cell(text: str) -> str:
+    """A cell Excel would run as a formula gets a leading apostrophe. Emails and
+    sources come from sign-up forms, so they are user input."""
+    return "'" + text if text.startswith(FORMULA_START) else text
+
+
+def read_csv(path: Path) -> csv.DictReader:
+    """Rows of a CSV as real tools save it: comma, semicolon (Italian Excel) or
+    tab as separator, with or without the byte-order mark Excel adds."""
+    text = path.read_text(encoding="utf-8-sig")
+    header = text.split("\n", 1)[0]
+    return csv.DictReader(io.StringIO(text, newline=""), delimiter=max(",;\t", key=header.count))
+
+
+def parse_day(text: str | None) -> date | None:
+    """Date from "2026-05-20", "2026-05-20 14:03:00 +0200", "2026-05-20T14:03Z"
+    or "20/05/2026" (with or without a time); None if empty."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    head = text.split()[0].split("T")[0]
+    for fmt in DATE_FORMATS:
+        try:
+            return datetime.strptime(head, fmt).date()
+        except ValueError:
+            pass
+    raise ValueError(f"date {text!r} is neither YYYY-MM-DD nor DD/MM/YYYY")
+
+
+def parse_amount(text: str | None) -> float:
+    """Number from "49.90", "49,90", "1.234,56" or "1,234.56" (currency signs ignored)."""
+    t = "".join(ch for ch in (text or "") if ch.isdigit() or ch in ",.-")
+    if not t:
+        return 0.0
+    if "," in t and "." in t:  # the separator that comes last is the decimal one
+        t = t.replace(".", "").replace(",", ".") if t.rfind(",") > t.rfind(".") else t.replace(",", "")
+    else:
+        t = t.replace(",", ".")
+    return float(t)
 
 
 def lifecycle_stage(recency_days: int, orders: int) -> str:
@@ -82,22 +127,26 @@ def order_rows(path: Path):
     are folded into one order, and cancelled, refunded and voided orders are
     skipped: they are not purchases.
     """
-    with path.open(newline="", encoding="utf-8-sig") as fh:  # -sig: Excel adds a BOM
-        reader = csv.DictReader(fh)
-        if not SHOPIFY_COLUMNS <= set(reader.fieldnames or ()):
-            for row in reader:
-                yield row.get("email"), row.get("order_date"), row.get("order_value_eur")
-            return
-        orders: dict[str, dict] = {}
+    reader = read_csv(path)
+    columns = set(reader.fieldnames or ())
+    if not SHOPIFY_COLUMNS <= columns:
+        # Simple format. A customer id instead of an email is fine for the
+        # timing tool; the Klaviyo sync then has nobody it can write to.
+        who = next((c for c in ("email", "customer_id", "customer") if c in columns), "email")
+        value = next((c for c in VALUE_COLUMNS if c in columns), "order_value_eur")
         for row in reader:
-            order = orders.setdefault(row["Name"], {})
-            for k, v in row.items():
-                if v and not order.get(k):
-                    order[k] = v
-        for o in orders.values():
-            if o.get("Cancelled at") or o.get("Financial Status", "").lower() in NOT_A_SALE:
-                continue
-            yield o.get("Email"), (o.get("Created at") or "")[:10], o.get("Total")
+            yield row.get(who), row.get("order_date"), row.get(value)
+        return
+    orders: dict[str, dict] = {}
+    for row in reader:
+        order = orders.setdefault(row["Name"], {})
+        for k, v in row.items():
+            if v and not order.get(k):
+                order[k] = v
+    for o in orders.values():
+        if o.get("Cancelled at") or o.get("Financial Status", "").lower() in NOT_A_SALE:
+            continue
+        yield o.get("Email"), o.get("Created at"), o.get("Total")
 
 
 def read_orders(path: Path, as_of: date | None = None) -> dict[str, dict]:
@@ -112,14 +161,14 @@ def read_orders(path: Path, as_of: date | None = None) -> dict[str, dict]:
     agg: dict[str, dict] = {}
     for email, day, value in order_rows(path):
         email = (email or "").strip().lower()
-        if not email or not day:
+        order_date = parse_day(day)
+        if not email or order_date is None:
             continue
-        order_date = datetime.strptime(day.strip(), "%Y-%m-%d").date()
         if as_of and order_date > as_of:
             continue
         a = agg.setdefault(email, {"orders": 0, "last": order_date, "monetary": 0.0})
         a["orders"] += 1
-        a["monetary"] += float(value or 0)
+        a["monetary"] += parse_amount(value)
         if order_date > a["last"]:
             a["last"] = order_date
     return agg
@@ -133,22 +182,21 @@ def read_consent(path: Path) -> dict[str, dict]:
     consenting; see build_profiles() for what an opted_in record also needs.
     """
     out: dict[str, dict] = {}
-    with path.open(newline="", encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            email = (row.get("email") or "").strip().lower()
-            if email:
-                out[email] = {
-                    "status": (row.get("consent_status") or "unknown").strip(),
-                    "source": (row.get("consent_source") or "").strip(),
-                    "timestamp": (row.get("consent_timestamp") or "").strip(),
-                }
+    for row in read_csv(path):
+        email = (row.get("email") or "").strip().lower()
+        if email:
+            out[email] = {
+                "status": (row.get("consent_status") or "unknown").strip(),
+                "source": (row.get("consent_source") or "").strip(),
+                "timestamp": (row.get("consent_timestamp") or "").strip(),
+            }
     return out
 
 
 def consent_date(timestamp: str) -> date | None:
-    """Date of an ISO 8601 consent timestamp, or None if it is not one."""
+    """Date of a consent timestamp, or None if there is no readable date."""
     try:
-        return datetime.fromisoformat(timestamp).date()
+        return parse_day(timestamp)
     except ValueError:
         return None
 
@@ -317,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
         with args.suppressed.open("w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh, lineterminator="\n")
             w.writerow(["email", "reason"])
-            w.writerows(held)
+            w.writerows([safe_cell(email), reason] for email, reason in held)
         who = "person" if len(held) == 1 else "people"
         print(f"\nsuppression list ({len(held)} {who}) -> {args.suppressed}")
     if not profiles:

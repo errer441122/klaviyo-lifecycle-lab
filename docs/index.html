@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Lifecycle tools: pre-send check, lifecycle and consent, second-order timing</title>
+<meta name="description" content="Check an email template before it goes live, turn a Shopify orders export into lifecycle stages behind a consent gate, and time the second-order email. Runs in your browser.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f4f6f4; --surface: #fbfcfb; --ink: #101614; --ink-2: #47524d; --muted: #6a7570;
+  --line: #dde3df; --rest: #d5dcd8; --accent: #0b6e4f; --on-accent: #ffffff; --tint: #e7f1ec;
+  --bad: #a3361f; --bad-tint: #fbece8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0c1210; --surface: #121a17; --ink: #edf2ef; --ink-2: #b9c4be; --muted: #8b9690;
+    --line: #25302b; --rest: #2b3833; --accent: #5fd3a4; --on-accent: #06100c; --tint: #16241e;
+    --bad: #ff9b85; --bad-tint: #2a1714;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 16px/1.6 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+a { color: var(--accent); text-underline-offset: 3px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.top { border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
+.top b { font-size: 15px; }
+.top nav { display: flex; gap: 20px; font-size: 14.5px; }
+.top nav a { color: var(--ink-2); text-decoration: none; }
+.top .src { margin-left: auto; font-size: 14.5px; }
+h1 { font-family: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  font-size: clamp(30px, 4vw, 44px); line-height: 1.1; letter-spacing: -0.03em; font-weight: 650; margin: 0 0 14px; max-width: 22ch; }
+.hero { padding: 56px 0 28px; }
+.lead { font-size: 18px; color: var(--ink-2); max-width: 60ch; margin: 0 0 18px; }
+.status { display: inline-flex; align-items: center; gap: 10px; font-size: 14.5px; color: var(--ink-2);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.status.ok::before { background: var(--accent); }
+.status.err { color: var(--bad); }
+.status.err::before { background: var(--bad); }
+section.tool { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 28px 30px; margin: 0 0 28px; }
+section.tool h2 { font-size: 24px; letter-spacing: -0.02em; margin: 0 0 6px; }
+section.tool > p { color: var(--ink-2); margin: 0 0 20px; max-width: 70ch; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 20px; margin-bottom: 18px; }
+label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+label small { font-weight: 400; color: var(--muted); }
+input[type=text], input[type=date], textarea { font: inherit; font-size: 15px; color: var(--ink); background: var(--page);
+  border: 1px solid var(--rest); border-radius: 8px; padding: 9px 11px; width: 100%; }
+textarea { min-height: 130px; font-family: ui-monospace, Consolas, monospace; font-size: 13.5px; resize: vertical; }
+input[type=file] { font: inherit; font-size: 14px; color: var(--ink-2); }
+input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+button { font: inherit; font-size: 15px; font-weight: 600; border-radius: 999px; padding: 10px 20px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); }
+button.ghost { background: transparent; color: var(--accent); }
+button:disabled { opacity: .5; cursor: progress; }
+.result { margin-top: 22px; }
+.result:empty { display: none; }
+.msg { padding: 12px 16px; border-radius: 8px; background: var(--tint); }
+.msg.bad { background: var(--bad-tint); color: var(--bad); }
+.problems { margin: 10px 0 0; padding-left: 20px; }
+.problems li { margin: 4px 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.tile { border-top: 2px solid var(--accent); padding-top: 8px; }
+.tile b { display: block; font-size: 26px; letter-spacing: -0.02em; font-weight: 650; }
+.tile span { font-size: 13.5px; color: var(--ink-2); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0; }
+th, td { padding: 7px 10px; text-align: left; white-space: nowrap; }
+thead th { font-size: 12.5px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+tbody tr + tr td { border-top: 1px solid var(--line); }
+.note { font-size: 13.5px; color: var(--muted); margin: 4px 0 14px; }
+h3 { font-size: 17px; margin: 22px 0 4px; }
+.steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+.steps span { font-size: 13.5px; color: var(--ink-2); }
+.steps b { display: block; font-size: 24px; font-weight: 650; }
+.steps i { display: block; height: 8px; border-radius: 4px; background: var(--accent); min-width: 3px; margin-top: 4px; }
+footer { color: var(--ink-2); font-size: 14px; padding: 8px 0 48px; }
+@media (max-width: 640px) {
+  .wrap { padding: 0 16px; } .top nav { display: none; } section.tool { padding: 20px 18px; }
+  .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+<b>Lifecycle tools</b>
+<nav aria-label="Tools"><a href="#check">Pre-send check</a><a href="#lifecycle">Lifecycle and consent</a><a href="#timing">Second-order timing</a></nav>
+<a class="src" href="https://github.com/errer441122/lifecycle-automation-lab">Source on GitHub</a>
+</div></header>
+<main class="wrap">
+<div class="hero">
+<h1>Your files in, the lists your CRM team needs out.</h1>
+<p class="lead">Three tools for a Shopify and Klaviyo store. Load your own exports, or try them on the example files.
+Everything runs in this page: your files never leave your computer.</p>
+<p class="status" id="status" role="status">Loading the analysis engine (about 10 seconds the first time)</p>
+</div>
+
+<section class="tool" id="check">
+<h2>Check a template before it goes live</h2>
+<p>Paste the HTML from Klaviyo's code editor. It finds what a recipient would see: a greeting that reads
+"Ciao ,", a dead link, a hand-typed UTM that breaks the naming rules, a missing unsubscribe link, a subject cut off on a phone.</p>
+<div class="fields">
+<label style="grid-column: 1 / -1">Template HTML <textarea id="tpl-html" spellcheck="false" placeholder="&lt;html&gt;..."></textarea></label>
+<label>Subject <small>optional</small><input type="text" id="tpl-subject"></label>
+<label>Preview text <small>optional</small><input type="text" id="tpl-preview"></label>
+</div>
+<div class="actions">
+<button id="tpl-run">Check</button>
+<button class="ghost" id="tpl-bad">Try a broken example</button>
+<button class="ghost" id="tpl-good">Try a fixed template</button>
+</div>
+<div class="result" id="tpl-out" aria-live="polite"></div>
+</section>
+
+<section class="tool" id="lifecycle">
+<h2>Lifecycle stages, behind a consent gate</h2>
+<p>From the Shopify orders export (<i>Orders &gt; Export</i>, as it comes) and the consent export of your sign-up form or ESP.
+Every customer gets a stage: New, Repeat, At risk, Dormant or Churned. Only people whose consent has a recorded source and
+date are kept; everyone else goes to a suppression list with the reason.</p>
+<div class="fields">
+<label>Orders CSV <input type="file" id="lc-orders" accept=".csv,text/csv"></label>
+<label>Consent CSV <small>email, consent_status, consent_source, consent_timestamp</small><input type="file" id="lc-consent" accept=".csv,text/csv"></label>
+<label>Measure recency as of <input type="date" id="lc-asof"></label>
+</div>
+<div class="actions">
+<button id="lc-run">Build the lists</button>
+<button class="ghost" id="lc-example">Try with the example files</button>
+</div>
+<div class="result" id="lc-out" aria-live="polite"></div>
+</section>
+
+<section class="tool" id="timing">
+<h2>When to send the second-order email</h2>
+<p>From the same orders export: how many customers buy again by day 30, 60, 90, 180 and 365, counting only customers who
+had a full year to come back. The median is the delay to put in the post-purchase flow.</p>
+<div class="fields">
+<label>Orders CSV <input type="file" id="tm-orders" accept=".csv,text/csv"></label>
+</div>
+<div class="actions">
+<button id="tm-run">Measure</button>
+<button class="ghost" id="tm-example">Try with 36,969 real orders (public UCI data)</button>
+</div>
+<div class="result" id="tm-out" aria-live="polite"></div>
+</section>
+</main>
+<footer><div class="wrap">
+<p>The page runs the repository's own Python code in your browser with <a href="https://pyodide.org">Pyodide</a>: the same
+functions and tests as the command line. Nothing is sent to Klaviyo from here; writing to Klaviyo is a command-line step with an
+API key. Example files are handwritten with <code>example.com</code> addresses.</p>
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.28.3/full/pyodide.js" integrity="sha384-4X7gSPzQ4pHfjTE5aBEPJAQcHu55sciq+NWO3OUOZ3zHSJhn4te9CBjUyRSr+nei" crossorigin="anonymous"></script>
+<script>
+"use strict";
+const REPO = "errer441122/lifecycle-automation-lab";
+const BASE = location.hostname.endsWith("github.io") ? `https://raw.githubusercontent.com/${REPO}/main/` : "../";
+const UCI = "https://raw.githubusercontent.com/errer441122/digital-campaign-performance-dashboard/main/data/online_retail_orders.csv";
+const FILES = ["sync_klaviyo.py", "repeat_timing.py", "build_templates.py", "pre_send_check.py", "web_app.py"];
+const $ = (id) => document.getElementById(id);
+
+function setStatus(text, kind) {
+  const s = $("status");
+  s.textContent = text;
+  s.className = "status" + (kind ? " " + kind : "");
+}
+
+let enginePromise = null;
+function engine() {
+  if (!enginePromise) {
+    enginePromise = (async () => {
+      const py = await loadPyodide();
+      const dir = "/home/pyodide/app";
+      py.FS.mkdirTree(dir);
+      for (const f of FILES) {
+        const r = await fetch(BASE + "src/" + f);
+        if (!r.ok) throw new Error(`could not load ${f} (${r.status})`);
+        py.FS.writeFile(`${dir}/${f}`, await r.text());
+      }
+      py.runPython(`import sys; sys.path.insert(0, "${dir}")`);
+      setStatus("Ready. Your files stay on this computer.", "ok");
+      return py;
+    })().catch((e) => {
+      enginePromise = null;
+      setStatus("The engine did not load: " + e.message + ". Check the connection and reload.", "err");
+      throw e;
+    });
+  }
+  return enginePromise;
+}
+
+async function fileText(input) {
+  const f = input.files[0];
+  if (!f) return null;
+  const buf = await f.arrayBuffer();
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+  catch { return new TextDecoder("windows-1252").decode(buf); }  // older Excel exports
+}
+
+async function urlText(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`could not load the example (${r.status})`);
+  return r.text();
+}
+
+async function run(button, out, task) {
+  button.disabled = true;
+  out.replaceChildren(el("p", { className: "note" }, "Working..."));
+  try {
+    const py = await engine();
+    const result = await task(py);
+    out.replaceChildren(...(result.error ? [el("p", { className: "msg bad" }, result.error)] : render[out.id](result)));
+  } catch (e) {
+    out.replaceChildren(el("p", { className: "msg bad" }, e.message || String(e)));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function call(py, code, files = {}, values = {}) {
+  for (const [path, text] of Object.entries(files)) py.FS.writeFile(path, text);
+  for (const [name, value] of Object.entries(values)) py.globals.set(name, value);
+  return JSON.parse(py.runPython("import web_app\n" + code));
+}
+
+// DOM helpers: user data only ever goes through textContent.
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  for (const c of children) node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return node;
+}
+function table(header, rows, limit = 25) {
+  const body = rows.slice(0, limit).map((r) => el("tr", {}, ...r.map((c) => el("td", {}, c))));
+  const parts = [el("div", { className: "scroll" }, el("table", {},
+    el("thead", {}, el("tr", {}, ...header.map((h) => el("th", {}, h)))), el("tbody", {}, ...body)))];
+  if (rows.length > limit) parts.push(el("p", { className: "note" }, `Showing ${limit} of ${rows.length.toLocaleString("en")}. The download has them all.`));
+  return parts;
+}
+function tile(value, label) { return el("div", { className: "tile" }, el("b", {}, value), el("span", {}, label)); }
+function download(name, text) {
+  const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" })), download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function downloadButton(label, name, text) {
+  const b = el("button", { className: "ghost", type: "button" }, label);
+  b.addEventListener("click", () => download(name, text));
+  return b;
+}
+const pct = (x) => `${Math.round(x * 100)}%`;
+
+const render = {
+  "tpl-out": (r) => r.problems.length
+    ? [el("p", { className: "msg bad" }, `${r.problems.length} thing${r.problems.length > 1 ? "s" : ""} to fix before this goes live:`),
+       el("ul", { className: "problems" }, ...r.problems.map((p) => el("li", {}, p)))]
+    : [el("p", { className: "msg" }, "Ready to paste: nothing a recipient would notice.")],
+  "lc-out": (r) => {
+    const rep = r.report;
+    const reasons = Object.entries(rep.suppressed_by_reason).map(([k, v]) => `${v} ${k}`).join(", ") || "none";
+    const sources = Object.entries(rep.eligible_by_consent_source).map(([k, v]) => `${v} via ${k}`).join(", ") || "none";
+    return [
+      el("div", { className: "tiles" },
+        tile(rep.eligible.toLocaleString("en"), "can receive lifecycle emails"),
+        tile(rep.suppressed.toLocaleString("en"), "held back: " + reasons),
+        ...Object.entries(rep.eligible_by_stage).map(([k, v]) => tile(v.toLocaleString("en"), k))),
+      el("p", { className: "note" }, `Consent sources of the eligible: ${sources}. Recency measured as of ${rep.as_of}.`),
+      el("h3", {}, "Lifecycle stage per customer"),
+      ...table(r.header, r.profiles),
+      el("div", { className: "actions" }, downloadButton("Download profiles.csv", "profiles.csv", r.profiles_csv)),
+      el("h3", {}, "Suppression list"),
+      ...(r.suppressed.length ? table(["email", "reason"], r.suppressed) : [el("p", { className: "note" }, "Nobody is held back.")]),
+      el("div", { className: "actions" }, downloadButton("Download suppressed.csv", "suppressed.csv", r.suppressed_csv)),
+    ];
+  },
+  "tm-out": (r) => {
+    if (!r.customers) return [el("p", { className: "msg" }, "No customer has a full year of data after their first order yet: load a file that covers more than a year.")];
+    const days = Object.keys(r.share_back_by_day).sort((a, b) => a - b);
+    const parts = [];
+    if (r.customers < r.min_customers) parts.push(el("p", { className: "msg bad" }, `Only ${r.customers} customers have a full year of data: treat these numbers as a rough sketch.`));
+    parts.push(el("p", { className: "note" }, `${r.customers.toLocaleString("en")} customers with a full year of data. Share who ordered again by:`));
+    parts.push(el("ol", { className: "steps" }, ...days.map((d) => {
+      const s = r.share_back_by_day[d];
+      return el("li", {}, el("span", {}, `day ${d}`), el("b", {}, pct(s)), el("i", { style: `width:${Math.max(s * 100, 1)}%` }));
+    })));
+    parts.push(r.median_days_if_back === null
+      ? el("p", { className: "msg" }, "Nobody came back within a year: there is no repeat window to time a flow on.")
+      : el("p", { className: "msg" }, `Half of those who came back within a year did so within ${Math.round(r.median_days_if_back)} days: send the second-order email before day ${Math.round(r.median_days_if_back)}. By day 90, ${pct(r.share_back_by_day["90"])} have already ordered again; keep the win-back offer for the rest.`));
+    return parts;
+  },
+};
+
+const BROKEN = `<p>Ciao {{ first_name|default:'' }}, il tuo carrello è ancora qui.</p>
+<a href="#">Riprendi l'ordine</a>
+<a href="https://shop.example/collections/all?utm_source=newsletter&utm_medium=email">Vedi tutto</a>`;
+
+$("tpl-run").addEventListener("click", () => run($("tpl-run"), $("tpl-out"), (py) =>
+  call(py, "web_app.check_template(tpl_html, tpl_subject, tpl_preview)", {},
+       { tpl_html: $("tpl-html").value, tpl_subject: $("tpl-subject").value, tpl_preview: $("tpl-preview").value })));
+$("tpl-bad").addEventListener("click", () => {
+  $("tpl-html").value = BROKEN;
+  $("tpl-subject").value = "Ultimo promemoria: il tuo carrello sta per scadere, non perderlo";
+  $("tpl-preview").value = "Ultimo promemoria: il tuo carrello sta per scadere, non perderlo!";
+  $("tpl-run").click();
+});
+$("tpl-good").addEventListener("click", async () => {
+  const py = await engine();
+  $("tpl-html").value = py.runPython("import build_templates as bt\nbt.render_html(bt.EMAILS[2])");
+  $("tpl-subject").value = py.runPython("bt.EMAILS[2]['subject']");
+  $("tpl-preview").value = py.runPython("bt.EMAILS[2]['preheader']");
+  $("tpl-run").click();
+});
+
+$("lc-asof").value = new Date().toISOString().slice(0, 10);
+$("lc-run").addEventListener("click", () => run($("lc-run"), $("lc-out"), async (py) => {
+  const [orders, consent] = [await fileText($("lc-orders")), await fileText($("lc-consent"))];
+  if (!orders || !consent) return { error: "Choose both files: the orders export and the consent export." };
+  return call(py, 'web_app.lifecycle("/tmp/orders.csv", "/tmp/consent.csv", as_of)',
+              { "/tmp/orders.csv": orders, "/tmp/consent.csv": consent }, { as_of: $("lc-asof").value });
+}));
+$("lc-example").addEventListener("click", () => run($("lc-example"), $("lc-out"), async (py) => {
+  $("lc-asof").value = "2026-06-01";
+  const [orders, consent] = [await urlText(BASE + "data/shopify_orders_example.csv"), await urlText(BASE + "data/consent_example.csv")];
+  return call(py, 'web_app.lifecycle("/tmp/orders.csv", "/tmp/consent.csv", "2026-06-01")',
+              { "/tmp/orders.csv": orders, "/tmp/consent.csv": consent });
+}));
+
+$("tm-run").addEventListener("click", () => run($("tm-run"), $("tm-out"), async (py) => {
+  const orders = await fileText($("tm-orders"));
+  if (!orders) return { error: "Choose the orders export first." };
+  return call(py, 'web_app.timing("/tmp/timing.csv")', { "/tmp/timing.csv": orders });
+}));
+$("tm-example").addEventListener("click", () => run($("tm-example"), $("tm-out"), async (py) =>
+  call(py, 'web_app.timing("/tmp/timing.csv")', { "/tmp/timing.csv": await urlText(UCI) })));
+
+engine().catch(() => {});
+</script>
+</body>
+</html>

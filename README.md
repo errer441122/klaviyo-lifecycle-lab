@@ -7,8 +7,14 @@ actually happens between "the flow is drawn" and "the email arrives".
 
 ## Use it on your own store
 
-Three tools that run on the files a Shopify + Klaviyo team already has. Nothing
-is sent anywhere unless you add `--live` and a Klaviyo API key.
+**[Open the tools in your browser](https://errer441122.github.io/lifecycle-automation-lab/)**:
+load your own CSV files, see the result, download the lists. The page runs
+this repository's Python in the browser, so nothing leaves your computer and
+nothing needs installing. Each tool has a "try it" button with the example
+files, which are only there to show what the output looks like.
+
+The same three tools run from the command line, where the lifecycle sync can
+also write to Klaviyo (with `--live` and an API key; never from the page):
 
 | Task | Command | What you get |
 | --- | --- | --- |
@@ -18,7 +24,11 @@ is sent anywhere unless you add `--live` and a Klaviyo API key.
 
 The orders file is the Shopify export as it comes out of *Orders > Export*: the
 line items of each order are folded into one order, and cancelled, refunded and
-voided orders are left out. Files and columns: [`data/README.md`](data/README.md).
+voided orders are left out. Files saved again by Excel work too: comma,
+semicolon or tab as separator, decimal commas (`49,90`, `1.234,50`), dates as
+`YYYY-MM-DD` or `DD/MM/YYYY`, with or without the byte-order mark, and in the
+browser also the older Windows encoding. Files and columns:
+[`data/README.md`](data/README.md).
 
 So far the Shopify reading is tested on handwritten files in Shopify's export
 layout ([`data/shopify_orders_example.csv`](data/shopify_orders_example.csv)),

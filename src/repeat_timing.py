@@ -25,10 +25,10 @@ from __future__ import annotations
 import argparse
 import statistics
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
-from sync_klaviyo import order_rows
+from sync_klaviyo import order_rows, parse_day
 
 CHECKPOINTS = (30, 60, 90, 180, 365)
 MIN_CUSTOMERS = 30  # below this, one customer moves a share by more than 3 points
@@ -39,8 +39,9 @@ def order_days(path: Path) -> dict[str, set[date]]:
     days: dict[str, set[date]] = defaultdict(set)
     for email, day, _value in order_rows(path):
         email = (email or "").strip().lower()
-        if email and day:
-            days[email].add(datetime.strptime(day.strip(), "%Y-%m-%d").date())
+        when = parse_day(day)
+        if email and when:
+            days[email].add(when)
     return days
 
 
