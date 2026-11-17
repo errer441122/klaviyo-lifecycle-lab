@@ -125,5 +125,15 @@ class TestNetworkSafety(unittest.TestCase):
         self.assertIn("Nothing left the machine", out.getvalue())
 
 
+class TestPagePreview(unittest.TestCase):
+    def test_the_browser_page_shows_the_current_templates(self):
+        # docs/index.html previews docs/emails/. After changing a template:
+        #     python src/build_templates.py --out docs/emails
+        docs = Path(__file__).resolve().parents[1] / "docs" / "emails"
+        for e in bt.EMAILS:
+            with self.subTest(e["key"]):
+                self.assertEqual((docs / f"{e['key']}.html").read_text(encoding="utf-8"), bt.render_html(e))
+
+
 if __name__ == "__main__":
     unittest.main()
