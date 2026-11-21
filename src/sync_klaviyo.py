@@ -1,8 +1,7 @@
 """Lifecycle stage -> Klaviyo profile property, behind a hard consent gate.
 
-The segmentation rules are the ones from the analysis repo
-(`digital-campaign-performance-dashboard/src/crm_lifecycle.py`): recency and
-order count map every customer to New / Repeat / At risk / Dormant / Churned.
+The segmentation rules are the ones from my earlier analysis of the public
+UCI orders (see `data/REAL_DATA_PROVENANCE.md`): recency and order count map every customer to New / Repeat / At risk / Dormant / Churned.
 Here they run on the real orders of a live store instead of on the public
 dataset, and the resulting stage is written to Klaviyo as a profile property.
 

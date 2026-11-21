@@ -7,13 +7,13 @@ actually happens between "the flow is drawn" and "the email arrives".
 
 ## Use it on your own store
 
-**[Open the tools in your browser](https://errer441122.github.io/lifecycle-automation-lab/)**:
+**[Open the tools in your browser](https://errer441122.github.io/klaviyo-lifecycle-lab/)**:
 load your own CSV files, see the result, download the lists. The page runs
 this repository's Python in the browser, so nothing leaves your computer and
 nothing needs installing. Each tool has a "try it" button with the example
 files, which are only there to show what the output looks like.
 
-[![The tools page: the seven flow emails as a recipient sees them, and the second-order timing tool on 36,969 public orders](assets/tools_page.png)](https://errer441122.github.io/lifecycle-automation-lab/)
+[![The tools page: the seven flow emails as a recipient sees them, and the second-order timing tool on 36,969 public orders](assets/tools_page.png)](https://errer441122.github.io/klaviyo-lifecycle-lab/)
 
 The page opens on the seven flow emails as a recipient sees them, with the
 Klaviyo tags filled in the way Klaviyo's own preview does. Below are the three
@@ -40,8 +40,8 @@ browser also the older Windows encoding. Files and columns:
 So far the Shopify reading is tested on handwritten files in Shopify's export
 layout ([`data/shopify_orders_example.csv`](data/shopify_orders_example.csv)),
 not on a large store. The timing tool was also run on the 36,969 real orders of
-the public UCI dataset and gives the same result as my
-[analysis repo](https://github.com/errer441122/digital-campaign-performance-dashboard):
+the public UCI dataset ([`data/online_retail_orders.csv`](data/online_retail_orders.csv),
+source and licence in [`data/REAL_DATA_PROVENANCE.md`](data/REAL_DATA_PROVENANCE.md)):
 3,359 customers with a full year of data, half of those who came back within 71
 days.
 
@@ -136,8 +136,8 @@ order history + consent  ->  lifecycle stage on the profile  ->  "At risk" segme
 | Dormant | last order 181-365 days ago |
 | Churned | last order > 365 days ago |
 
-The thresholds are the same as in my
-[CRM retention analysis](https://github.com/errer441122/digital-campaign-performance-dashboard).
+The thresholds are the same ones I used in an earlier RFM and retention
+analysis of the UCI orders.
 
 Consent comes first: only profiles that have already opted in are updated, and
 only if the consent record says where and when the consent was given, because

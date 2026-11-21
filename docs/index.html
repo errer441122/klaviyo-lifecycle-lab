@@ -181,7 +181,7 @@ tbody tr + tr td { border-top: 1px solid var(--line); }
 <header class="nav"><div class="wrap">
 <a class="brand" href="#top">Lifecycle Lab</a>
 <nav aria-label="Tools"><a href="#check">Pre-send check</a><a href="#lifecycle">Lifecycle and consent</a><a href="#timing">Second-order timing</a></nav>
-<a class="src" href="https://github.com/errer441122/lifecycle-automation-lab">Source on GitHub</a>
+<a class="src" href="https://github.com/errer441122/klaviyo-lifecycle-lab">Source on GitHub</a>
 </div></header>
 
 <main id="top">
@@ -275,17 +275,17 @@ year to come back. The median is the delay to set in the post-purchase flow.</p>
 for the customers the lifecycle tool marks At risk.</p>
 <div class="shots">
 <figure class="big">
-<img src="https://raw.githubusercontent.com/errer441122/lifecycle-automation-lab/main/assets/flow-abandoned-cart.png" width="1800" height="1067" loading="lazy" decoding="async"
+<img src="https://raw.githubusercontent.com/errer441122/klaviyo-lifecycle-lab/main/assets/flow-abandoned-cart.png" width="1800" height="1067" loading="lazy" decoding="async"
 alt="Klaviyo canvas of the abandoned cart flow: checkout started, wait 4 hours, email 2.1, wait 20 hours, email 2.2, wait 2 days, email 2.3.">
 <figcaption>Abandoned cart: 2.1, 2.2 and 2.3, sent 4 hours, 1 day and 3 days after checkout.</figcaption>
 </figure>
 <figure>
-<img src="https://raw.githubusercontent.com/errer441122/lifecycle-automation-lab/main/assets/flow-welcome.png" width="1800" height="1067" loading="lazy" decoding="async"
+<img src="https://raw.githubusercontent.com/errer441122/klaviyo-lifecycle-lab/main/assets/flow-welcome.png" width="1800" height="1067" loading="lazy" decoding="async"
 alt="Klaviyo canvas of the welcome flow: added to the double opt-in newsletter list, email 1.1, wait 3 days, email 1.2.">
 <figcaption>Welcome: 1.1 on day 0, 1.2 on day 3 after the double opt-in.</figcaption>
 </figure>
 <figure>
-<img src="https://raw.githubusercontent.com/errer441122/lifecycle-automation-lab/main/assets/flow-winback.png" width="1800" height="1067" loading="lazy" decoding="async"
+<img src="https://raw.githubusercontent.com/errer441122/klaviyo-lifecycle-lab/main/assets/flow-winback.png" width="1800" height="1067" loading="lazy" decoding="async"
 alt="Klaviyo canvas of the win-back flow: added to the At risk segment, email 3.1, wait 7 days, email 3.2.">
 <figcaption>Win-back: 3.1 on day 0, 3.2 on day 7 after entering At risk.</figcaption>
 </figure>
@@ -302,9 +302,9 @@ are handwritten with <code>example.com</code> addresses; the timing example uses
 <script src="https://cdn.jsdelivr.net/pyodide/v0.28.3/full/pyodide.js" integrity="sha384-4X7gSPzQ4pHfjTE5aBEPJAQcHu55sciq+NWO3OUOZ3zHSJhn4te9CBjUyRSr+nei" crossorigin="anonymous"></script>
 <script>
 "use strict";
-const REPO = "errer441122/lifecycle-automation-lab";
+const REPO = "errer441122/klaviyo-lifecycle-lab";
 const BASE = location.hostname.endsWith("github.io") ? `https://raw.githubusercontent.com/${REPO}/main/` : "../";
-const UCI = "https://raw.githubusercontent.com/errer441122/digital-campaign-performance-dashboard/main/data/online_retail_orders.csv";
+const UCI = BASE + "data/online_retail_orders.csv";
 const FILES = ["sync_klaviyo.py", "repeat_timing.py", "build_templates.py", "pre_send_check.py", "web_app.py"];
 const $ = (id) => document.getElementById(id);
 

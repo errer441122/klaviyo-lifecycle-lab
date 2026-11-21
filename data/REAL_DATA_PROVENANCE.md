@@ -1,0 +1,47 @@
+# Real Data Provenance
+
+## Source
+
+- **Dataset:** Online Retail II — UCI Machine Learning Repository (ID 502)
+- **URL:** https://archive.ics.uci.edu/static/public/502/online+retail+ii.zip
+- **Citation:** Chen, D. (2019). *Online Retail II*. UCI Machine Learning
+  Repository. https://doi.org/10.24432/C5CG6D
+- **License:** Creative Commons Attribution 4.0 International (CC BY 4.0).
+  Used here unmodified-in-spirit for a non-commercial analytics portfolio,
+  with attribution.
+- **Source archive SHA256:** `572e36277c2390fbfde10664750731e0a86f55e33470d91919085f0408e67bfb`
+- **Status:** REAL public transactional data (UK online retailer,
+  Dec 2009 - Dec 2011). Not simulated.
+- **Currency:** GBP (pounds sterling), as published in the source `Price`
+  column. Monetary fields are therefore suffixed `_gbp`; no FX conversion.
+
+## Cleaning rules applied
+
+1. Keep only rows with a Customer ID.
+2. Keep Quantity > 0 and Price > 0 (drops returns, credits, zero lines).
+3. Drop cancellation invoices (Invoice starting with `C`).
+4. Aggregate to one row per (Customer ID, Invoice) = one order.
+5. Read each invoice once. The two yearly sheets overlap on 1-9 Dec 2010;
+   rows of an invoice already read from the earlier sheet are skipped
+   (otherwise every order in that window is counted twice).
+
+## Prepared sample
+
+- **File:** `data/online_retail_orders.csv`
+- **Raw source rows scanned:** 1,067,371
+- **Rows skipped as the 1-9 Dec 2010 sheet overlap:** 22,523
+- **Rows kept after cleaning:** 791,045
+- **Orders (rows in prepared file):** 36,969
+- **Distinct customers:** 5,878
+- **Distinct countries:** 41
+- **Order date range:** 2009-12-01 … 2011-12-09
+- **Prepared file SHA256:** `9fa5dfbcf0c531287008807e4cf54b47367f38d540291df28af61ebc9aa415d0`
+
+The file was prepared by `src/prepare_real_data.py` in an earlier analysis
+repository (cleaning rules above); it is copied here unchanged, and the checksum
+above lets anyone confirm that.
+
+## Scope
+
+In this repository the file is used only by the second-order timing tool
+(`src/repeat_timing.py`) and its "try with real orders" button on the page.

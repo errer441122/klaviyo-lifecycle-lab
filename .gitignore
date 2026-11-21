@@ -2,6 +2,8 @@
 # personal data, and so does every list the scripts write from them.
 data/*.csv
 !data/*_example.csv
+# Public UCI dataset (anonymous customer ids, CC BY 4.0), used by the timing demo.
+!data/online_retail_orders.csv
 reports/sync_report.json
 reports/*.csv
 .env
