@@ -1,9 +1,10 @@
 # Lifecycle Automation Lab
 
-Three email flows built in Klaviyo on a Shopify development store: welcome with
-double opt-in, abandoned cart and win-back. I set up the accounts,
-authenticated the sending domain and sent the flows for real, to see what
-actually happens between "the flow is drawn" and "the email arrives".
+This is a **simulated coffee shop on a Shopify development store**. The orders
+were created for the exercise. The welcome, abandoned-cart and win-back flows
+ran in Klaviyo using an authenticated sending domain. One consenting test
+subscriber received three emails. The [run log](reports/results.md) documents
+those deliveries. The shop had no paying customers or commercial sales.
 
 ## Use it on your own store
 
