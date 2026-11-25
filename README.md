@@ -1,4 +1,4 @@
-# Lifecycle Automation Lab
+# Klaviyo Lifecycle Lab
 
 This is a **simulated coffee shop on a Shopify development store**. The orders
 were created for the exercise. The welcome, abandoned-cart and win-back flows
