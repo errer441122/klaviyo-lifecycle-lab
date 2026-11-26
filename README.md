@@ -1,5 +1,7 @@
 # Klaviyo Lifecycle Lab
 
+🇮🇹 **In italiano:** tre flussi Klaviyo inviati davvero a un iscritto di prova e tre strumenti per Shopify: controllo prima dell'invio, fasi del cliente legate al consenso, tempi del secondo ordine. [Apri la pagina in italiano](https://errer441122.github.io/klaviyo-lifecycle-lab/?lang=it)
+
 This is a **simulated coffee shop on a Shopify development store**. The orders
 were created for the exercise. The welcome, abandoned-cart and win-back flows
 ran in Klaviyo using an authenticated sending domain. One consenting test
